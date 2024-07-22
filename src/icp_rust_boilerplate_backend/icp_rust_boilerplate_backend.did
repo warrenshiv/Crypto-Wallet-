@@ -1,70 +1,51 @@
-type Bet = record {
-  id : nat64;
-  market_id : nat64;
-  created_at : nat64;
-  participant : text;
-  amount : nat64;
-  outcome : text;
-};
-type BetPayload = record {
-  market_id : nat64;
-  participant : text;
-  amount : nat64;
-  outcome : text;
-};
-type MarketPayload = record {
-  title : text;
-  closes_at : nat64;
-  description : text;
-  outcomes : vec text;
-};
 type Message = variant {
   Error : text;
   InvalidPayload : text;
   NotFound : text;
   Success : text;
-  UnAuthorized : text;
+  Unauthorized : text;
 };
-type Payout = record {
+type PointsPayload = record { user_id : nat64; points : nat64 };
+type Result = variant { Ok : Message; Err : Message };
+type Result_1 = variant { Ok : User; Err : Message };
+type Result_2 = variant { Ok : vec Transaction; Err : Message };
+type Result_3 = variant { Ok : nat64; Err : Message };
+type Result_4 = variant { Ok : Transaction; Err : Message };
+type Transaction = record {
   id : nat64;
-  market_id : nat64;
+  to_user_id : nat64;
   created_at : nat64;
-  participant : text;
+  from_user_id : nat64;
   amount : nat64;
 };
-type PayoutPayload = record { market_id : nat64; outcome : text };
-type PredictionMarket = record {
-  id : nat64;
-  title : text;
-  closes_at : nat64;
-  description : text;
-  created_at : nat64;
-  outcomes : vec text;
+type TransactionPayload = record {
+  to_user_id : nat64;
+  from_user_id : nat64;
+  amount : nat64;
 };
-type Result = variant { Ok : PredictionMarket; Err : Message };
-type Result_1 = variant { Ok : User; Err : Message };
-type Result_2 = variant { Ok : vec Bet; Err : Message };
-type Result_3 = variant { Ok : vec PredictionMarket; Err : Message };
-type Result_4 = variant { Ok : vec Payout; Err : Message };
-type Result_5 = variant { Ok : vec User; Err : Message };
-type Result_6 = variant { Ok : Bet; Err : Message };
-type Result_7 = variant { Ok : Message; Err : Message };
 type User = record {
   id : nat64;
   username : text;
-  role : UserRole;
+  balance : nat64;
   created_at : nat64;
+  email : text;
+  first_name : text;
+  last_name : text;
+  phone_number : text;
+  points : nat64;
 };
-type UserPayload = record { username : text; role : UserRole };
-type UserRole = variant { Participant; MarketCreator; Admin };
+type UserPayload = record {
+  email : text;
+  first_name : text;
+  last_name : text;
+  phone_number : text;
+};
 service : {
-  create_market : (MarketPayload, UserPayload) -> (Result);
+  award_points : (nat64, nat64) -> (Result);
   create_user : (UserPayload) -> (Result_1);
-  get_bets : (nat64) -> (Result_2) query;
-  get_markets : () -> (Result_3) query;
-  get_payouts : (nat64) -> (Result_4) query;
-  get_user_by_id : (nat64) -> (Result_1) query;
-  get_users : () -> (Result_5) query;
-  place_bet : (BetPayload, UserPayload) -> (Result_6);
-  resolve_market : (PayoutPayload) -> (Result_7);
+  get_transaction_history : (nat64) -> (Result_2) query;
+  get_user_balance : (nat64) -> (Result_3) query;
+  get_user_points : (nat64) -> (Result_3) query;
+  redeem_points : (PointsPayload) -> (Result);
+  send_transaction : (TransactionPayload) -> (Result_4);
 }

@@ -13,10 +13,14 @@ type IdCell = Cell<u64, Memory>;
 #[derive(candid::CandidType, Clone, Serialize, Deserialize, Default)]
 struct User {
     id: u64,
+    first_name: String,
+    last_name: String,
     username: String,
     email: String,
+    phone_number: String,
     created_at: u64,
     balance: u64, // Simplified balance for the demo
+    points: u64,  // Points for rewards
 }
 
 #[derive(candid::CandidType, Clone, Serialize, Deserialize, Default)]
@@ -81,8 +85,10 @@ thread_local! {
 
 #[derive(candid::CandidType, Deserialize, Serialize)]
 struct UserPayload {
-    username: String,
+    first_name: String,
+    last_name: String,
     email: String,
+    phone_number: String,
 }
 
 #[derive(candid::CandidType, Deserialize, Serialize)]
@@ -90,6 +96,12 @@ struct TransactionPayload {
     from_user_id: u64,
     to_user_id: u64,
     amount: u64,
+}
+
+#[derive(candid::CandidType, Deserialize, Serialize)]
+struct PointsPayload {
+    user_id: u64,
+    points: u64,
 }
 
 #[derive(candid::CandidType, Deserialize, Serialize)]
@@ -103,9 +115,14 @@ enum Message {
 
 #[ic_cdk::update]
 fn create_user(payload: UserPayload) -> Result<User, Message> {
-    if payload.username.is_empty() || payload.email.is_empty() {
+    if payload.first_name.is_empty()
+        || payload.last_name.is_empty()
+        || payload.email.is_empty()
+        || payload.phone_number.is_empty()
+    {
         return Err(Message::InvalidPayload(
-            "Ensure 'username' and 'email' are provided.".to_string(),
+            "Ensure 'first_name', 'last_name', 'email', and 'phone_number' are provided."
+                .to_string(),
         ));
     }
 
@@ -116,6 +133,24 @@ fn create_user(payload: UserPayload) -> Result<User, Message> {
         ));
     }
 
+    let phone_regex = Regex::new(r"^\+?[1-9]\d{1,14}$").unwrap(); // Basic regex for international phone numbers
+    if !phone_regex.is_match(&payload.phone_number) {
+        return Err(Message::InvalidPayload(
+            "Invalid phone number format".to_string(),
+        ));
+    }
+
+    // Ensure the email is unique for each user
+    let is_email_unique = USER_STORAGE.with(|storage| {
+        storage
+            .borrow()
+            .iter()
+            .all(|(_, user)| user.email != payload.email)
+    });
+    if !is_email_unique {
+        return Err(Message::InvalidPayload("Email already exists".to_string()));
+    }
+
     let id = ID_COUNTER
         .with(|counter| {
             let current_value = *counter.borrow().get();
@@ -123,12 +158,19 @@ fn create_user(payload: UserPayload) -> Result<User, Message> {
         })
         .expect("Cannot increment ID counter");
 
+    // Generate a username by concatenating the first and last name
+    let username = format!("{}{}", payload.first_name, payload.last_name).to_lowercase();
+
     let user = User {
         id,
-        username: payload.username,
+        username,
+        first_name: payload.first_name,
+        last_name: payload.last_name,
         email: payload.email,
+        phone_number: payload.phone_number,
         created_at: current_time(),
         balance: 0, // Initialize balance to 0
+        points: 0,  // Initialize points to 0
     };
     USER_STORAGE.with(|storage| storage.borrow_mut().insert(id, user.clone()));
     Ok(user)
@@ -137,7 +179,9 @@ fn create_user(payload: UserPayload) -> Result<User, Message> {
 #[ic_cdk::update]
 fn send_transaction(payload: TransactionPayload) -> Result<Transaction, Message> {
     if payload.amount == 0 {
-        return Err(Message::InvalidPayload("Amount must be greater than 0.".to_string()));
+        return Err(Message::InvalidPayload(
+            "Amount must be greater than 0.".to_string(),
+        ));
     }
 
     let from_user = USER_STORAGE.with(|storage| {
@@ -195,7 +239,51 @@ fn send_transaction(payload: TransactionPayload) -> Result<Transaction, Message>
     };
 
     TRANSACTION_STORAGE.with(|storage| storage.borrow_mut().insert(id, transaction.clone()));
+
+    // Award points for the transaction
+    award_points(payload.from_user_id, 10)?;
+    award_points(payload.to_user_id, 10)?;
+
     Ok(transaction)
+}
+
+#[ic_cdk::update]
+fn award_points(user_id: u64, points: u64) -> Result<Message, Message> {
+    USER_STORAGE.with(|storage| {
+        let mut storage = storage.borrow_mut();
+        if let Some(mut user) = storage.remove(&user_id) {
+            user.points += points;
+            storage.insert(user_id, user);
+            Ok(Message::Success(format!(
+                "Awarded {} points to user {}",
+                points, user_id
+            )))
+        } else {
+            Err(Message::NotFound("User not found".to_string()))
+        }
+    })
+}
+
+#[ic_cdk::update]
+fn redeem_points(payload: PointsPayload) -> Result<Message, Message> {
+    USER_STORAGE.with(|storage| {
+        let mut storage = storage.borrow_mut();
+        if let Some(mut user) = storage.remove(&payload.user_id) {
+            if user.points >= payload.points {
+                user.points -= payload.points;
+                storage.insert(payload.user_id, user);
+                Ok(Message::Success(format!(
+                    "Redeemed {} points from user {}",
+                    payload.points, payload.user_id
+                )))
+            } else {
+                storage.insert(payload.user_id, user); // Re-insert user in case of error
+                Err(Message::Error("Insufficient points.".to_string()))
+            }
+        } else {
+            Err(Message::NotFound("User not found".to_string()))
+        }
+    })
 }
 
 #[ic_cdk::query]
@@ -226,6 +314,18 @@ fn get_user_balance(user_id: u64) -> Result<u64, Message> {
             .iter()
             .find(|(_, user)| user.id == user_id)
             .map(|(_, user)| user.balance)
+            .ok_or(Message::NotFound("User not found".to_string()))
+    })
+}
+
+#[ic_cdk::query]
+fn get_user_points(user_id: u64) -> Result<u64, Message> {
+    USER_STORAGE.with(|storage| {
+        storage
+            .borrow()
+            .iter()
+            .find(|(_, user)| user.id == user_id)
+            .map(|(_, user)| user.points)
             .ok_or(Message::NotFound("User not found".to_string()))
     })
 }
