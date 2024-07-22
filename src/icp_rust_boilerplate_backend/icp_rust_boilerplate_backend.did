@@ -1,3 +1,4 @@
+type DepositPayload = record { user_id : nat64; amount : nat64 };
 type Message = variant {
   Error : text;
   InvalidPayload : text;
@@ -6,8 +7,8 @@ type Message = variant {
   Unauthorized : text;
 };
 type PointsPayload = record { user_id : nat64; points : nat64 };
-type Result = variant { Ok : Message; Err : Message };
-type Result_1 = variant { Ok : User; Err : Message };
+type Result = variant { Ok : User; Err : Message };
+type Result_1 = variant { Ok : Message; Err : Message };
 type Result_2 = variant { Ok : vec Transaction; Err : Message };
 type Result_3 = variant { Ok : nat64; Err : Message };
 type Result_4 = variant { Ok : Transaction; Err : Message };
@@ -41,11 +42,11 @@ type UserPayload = record {
   phone_number : text;
 };
 service : {
-  award_points : (nat64, nat64) -> (Result);
-  create_user : (UserPayload) -> (Result_1);
+  create_user : (UserPayload) -> (Result);
+  deposit_funds : (DepositPayload) -> (Result_1);
   get_transaction_history : (nat64) -> (Result_2) query;
   get_user_balance : (nat64) -> (Result_3) query;
   get_user_points : (nat64) -> (Result_3) query;
-  redeem_points : (PointsPayload) -> (Result);
+  redeem_points : (PointsPayload) -> (Result_1);
   send_transaction : (TransactionPayload) -> (Result_4);
 }

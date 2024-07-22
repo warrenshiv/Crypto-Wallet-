@@ -104,7 +104,14 @@ struct PointsPayload {
     points: u64,
 }
 
+// Deposit funds payload
 #[derive(candid::CandidType, Deserialize, Serialize)]
+struct DepositPayload {
+    user_id: u64,
+    amount: u64,
+}
+
+#[derive(candid::CandidType, Deserialize, Serialize, Debug)]
 enum Message {
     Success(String),
     Error(String),
@@ -158,8 +165,15 @@ fn create_user(payload: UserPayload) -> Result<User, Message> {
         })
         .expect("Cannot increment ID counter");
 
-    // Generate a username by concatenating the first and last name
-    let username = format!("{}{}", payload.first_name, payload.last_name).to_lowercase();
+    // Generate a username by concatenating the first and last name, making it to be of defined length
+    let username = format!(
+        "{}{}",
+        payload.first_name.to_lowercase(),
+        payload.last_name.to_lowercase()
+    )
+    .chars()
+    .take(10)
+    .collect::<String>();
 
     let user = User {
         id,
@@ -174,6 +188,29 @@ fn create_user(payload: UserPayload) -> Result<User, Message> {
     };
     USER_STORAGE.with(|storage| storage.borrow_mut().insert(id, user.clone()));
     Ok(user)
+}
+
+#[ic_cdk::update]
+fn deposit_funds(payload: DepositPayload) -> Result<Message, Message> {
+    if payload.amount == 0 {
+        return Err(Message::InvalidPayload(
+            "Amount must be greater than 0.".to_string(),
+        ));
+    }
+
+    USER_STORAGE.with(|storage| {
+        let mut user_storage = storage.borrow_mut();
+        if let Some(mut user) = user_storage.remove(&payload.user_id) {
+            user.balance += payload.amount;
+            user_storage.insert(payload.user_id, user);
+            Ok(Message::Success(format!(
+                "Deposited {} units of currency to user {}",
+                payload.amount, payload.user_id
+            )))
+        } else {
+            Err(Message::NotFound("User not found".to_string()))
+        }
+    })
 }
 
 #[ic_cdk::update]
@@ -241,27 +278,16 @@ fn send_transaction(payload: TransactionPayload) -> Result<Transaction, Message>
     TRANSACTION_STORAGE.with(|storage| storage.borrow_mut().insert(id, transaction.clone()));
 
     // Award points for the transaction
-    award_points(payload.from_user_id, 10)?;
-    award_points(payload.to_user_id, 10)?;
+    let points = payload.amount / 10; // Award 1 point for every 10 units of currency
+    USER_STORAGE.with(|storage| {
+        let mut user_storage = storage.borrow_mut();
+        if let Some(mut from_user) = user_storage.remove(&payload.from_user_id) {
+            from_user.points += points;
+            user_storage.insert(payload.from_user_id, from_user);
+        }
+    });
 
     Ok(transaction)
-}
-
-#[ic_cdk::update]
-fn award_points(user_id: u64, points: u64) -> Result<Message, Message> {
-    USER_STORAGE.with(|storage| {
-        let mut storage = storage.borrow_mut();
-        if let Some(mut user) = storage.remove(&user_id) {
-            user.points += points;
-            storage.insert(user_id, user);
-            Ok(Message::Success(format!(
-                "Awarded {} points to user {}",
-                points, user_id
-            )))
-        } else {
-            Err(Message::NotFound("User not found".to_string()))
-        }
-    })
 }
 
 #[ic_cdk::update]
