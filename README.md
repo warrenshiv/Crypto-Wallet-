@@ -1,39 +1,54 @@
-# Alumni Association Management Platform
 
-This project is a decentralized platform built on the Internet Computer, aiming to facilitate the management of alumni associations, events, mentorship requests, and communication within the alumni community. It leverages the power of the blockchain to ensure transparency and reliability in the management processes.
+# Crypto Wallet
 
-## Key Features
+This project implements a decentralized user and transaction management system on the Internet Computer. It uses Rust and various IC (Internet Computer) libraries for handling stable structures, candid, and CDK.
 
-### Alumni Management
-- **Create Alumni Profile**: Allows the creation of new alumni profiles with validation for input fields.
-- **Get Alumni Profiles**: Retrieves all registered alumni profiles.
-- **Get Alumni by ID**: Retrieves the profile of a specific alumni by their unique ID.
-- **Search Alumni**: Searches for alumni by name or graduation year.
+## Features
 
-### Association Management
-- **Create Association**: Allows the creation of new associations.
-- **Get Associations**: Retrieves all registered associations.
-- **Get Association by ID**: Retrieves the details of a specific association by its ID.
-- **Join Association**: Allows an alumni to join an association.
-- **Leave Association**: Allows an alumni to leave an association.
+- User Creation with validation
+- Fund Deposit to user accounts
+- Sending transactions between users
+- Redeeming points
+- Retrieving transaction history
+- Checking user balance and points
 
-### Event Management
-- **Create Event**: Allows the creation of new events within associations.
-- **Get Events**: Retrieves all registered events.
-- **Get Event by ID**: Retrieves the details of a specific event by its ID.
-- **RSVP to Event**: Allows alumni to RSVP to events.
+## Usage
 
-### Communication
-- **Send Message to Association**: Allows alumni to send messages to association members.
+### Create a User
 
-### Mentorship Management
-- **Request Mentorship**: Allows alumni to request mentorship from other alumni.
-- **Approve Mentorship Request**: Approves a mentorship request.
+To create a user, call the `create_user` method with a `UserPayload`:
 
-### Error Handling
-- **Not Found**: Returns an error if a requested resource (alumni, association, event) is not found.
-- **Invalid Input**: Handles errors related to invalid input fields.
+```rust
+dfx canister call your_canister create_user '(record {first_name="John"; last_name="Doe"; email="john.doe@example.com"; phone_number="+1234567890"})'
+```
 
+### Deposit Funds
+
+To deposit funds to a user's account, call the `deposit_funds` method with a `DepositPayload`:
+
+```rust
+dfx canister call your_canister deposit_funds '(record {user_id=1; amount=1000})'
+```
+
+### Send Transaction
+
+To send a transaction, call the `send_transaction` method with a `TransactionPayload`:
+
+```rust
+dfx canister call your_canister send_transaction '(record {from_user_id=1; to_user_id=2; amount=500})'
+```
+
+### Redeem Points
+
+To redeem points, call the `redeem_points` method with a `PointsPayload`:
+
+```rust
+dfx canister call your_canister redeem_points '(record {user_id=1; points=50})'
+```
+
+### Get Transaction History
+
+To get the transaction history for a user, call the `get_transaction_history` method:
 
 
 ## Requirements
